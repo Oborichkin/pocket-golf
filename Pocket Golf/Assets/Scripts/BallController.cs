@@ -19,6 +19,7 @@ public class BallController : MonoBehaviour
     Rigidbody rb;
     Plane castPlane;
     Vector3 start, end, direction, power;
+    bool turning;
     ControlState controlState = ControlState.idle;
 
     void Start()
@@ -69,12 +70,16 @@ public class BallController : MonoBehaviour
 
     private void TurnCamera(int dir)
     {
-        StartCoroutine(RotateMe(new Vector3(0, 90 * dir, 0), 0.3f));
-        ClearInput();
+        if (!turning)
+        {
+            StartCoroutine(RotateMe(new Vector3(0, 90 * dir, 0), 0.3f));
+            ClearInput();
+        }
     }
 
     IEnumerator RotateMe(Vector3 byAngles, float inTime)
     {
+        turning = true;
         var fromAngle = cameraTarget.transform.rotation;
         var toAngle = Quaternion.Euler(cameraTarget.transform.eulerAngles + byAngles);
         for (var t = 0f; t < 1; t += Time.deltaTime / inTime)
@@ -83,6 +88,7 @@ public class BallController : MonoBehaviour
             yield return null;
         }
         cameraTarget.transform.rotation = toAngle;
+        turning = false;
     }
 
     private void TurnStateHandler(Touch touch)
