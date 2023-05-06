@@ -7,8 +7,8 @@ public class BallController : MonoBehaviour
 {
 
     public GameObject cameraTarget;
-    public readonly float hitStrenghtMultiplier = 2.5f;
-    public readonly float hitMaxStrenght = 10.0f;
+    public readonly float hitStrenghtMultiplier = .5f;
+    public readonly float hitMaxStrenght = 1.0f;
     enum ControlState
     {
         idle,
@@ -21,41 +21,33 @@ public class BallController : MonoBehaviour
     Vector3 start, end, direction, power;
     bool turning;
     ControlState controlState = ControlState.idle;
+    bool isDesktop;
 
     void Start()
     {
         rb = GetComponent<Rigidbody>();
         castPlane = new Plane(Vector3.up, transform.position);
+
+        if (Application.platform == RuntimePlatform.Android ||
+            Application.platform == RuntimePlatform.IPhonePlayer ||
+            Application.platform == RuntimePlatform.WindowsPlayer ||
+            Application.platform == RuntimePlatform.OSXPlayer ||
+            Application.platform == RuntimePlatform.LinuxPlayer)
+        {
+            isDesktop = false;
+        }
+        else
+        {
+            isDesktop = true;
+        }
     }
 
     void Update()
     {
-        if (Input.touchCount > 0)
-        {
-            Touch touch = Input.GetTouch(0);
-            switch (controlState)
-            {
-                case ControlState.hit:
-                    HitStateHandler(touch);
-                    break;
-                case ControlState.turn:
-                    TurnStateHandler(touch);
-                    break;
-                case ControlState.idle:
-                    if (touch.position.y / Screen.height < 0.15)
-                    {
-                        controlState = ControlState.turn;
-                        TurnStateHandler(touch);
-                    }
-                    else
-                    {
-                        controlState = ControlState.hit;
-                        HitStateHandler(touch);
-                    }
-                    break;
-                default:
-                    break;
-            }
+        if (isDesktop) {
+            HitHandler();
+        } else {
+           TouchHitHandler();
         }
     }
 
@@ -91,47 +83,39 @@ public class BallController : MonoBehaviour
         turning = false;
     }
 
-    private void TurnStateHandler(Touch touch)
+    private void HitHandler()
     {
-        switch (touch.phase)
+        switch (controlState)
         {
-            case TouchPhase.Ended:
-                if (touch.position.x / Screen.width > 0.5)
-                    TurnCamera(1);
-                else
-                    TurnCamera(-1);
+            case ControlState.idle:
+                if (Input.GetMouseButtonDown(0))
+                {
+                    setStartPosition(Input.mousePosition);
+                } else if (Input.GetMouseButton(0)) {
+                    updateEndPosition(Input.mousePosition);
+                } else if (Input.GetMouseButtonUp(0)) {
+                    Hit();
+                }
                 break;
-            case TouchPhase.Canceled:
-                ClearInput();
-                break;
+            case ControlState.hit:
             default:
                 break;
         }
     }
 
-    private void HitStateHandler(Touch touch)
+    private void TouchHitHandler()
     {
-        Ray ray;
-        float enter;
+        if (Input.touchCount == 0)
+            return;
+        Touch touch = Input.GetTouch(0);
         switch (touch.phase)
         {
             case TouchPhase.Began:
-                castPlane = new Plane(Vector3.up, transform.position);
-                ray = Camera.main.ScreenPointToRay(touch.position);
-                enter = 0.0f;
-                if (castPlane.Raycast(ray, out enter))
-                    start = ray.GetPoint(enter);
+                setStartPosition(touch.position);
                 break;
             case TouchPhase.Moved:
             case TouchPhase.Stationary:
-                ray = Camera.main.ScreenPointToRay(touch.position);
-                enter = 0.0f;
-                if (castPlane.Raycast(ray, out enter))
-                    end = ray.GetPoint(enter);
-                direction = end - start;
-                direction.Normalize();
-                power = direction * (end - start).magnitude * hitStrenghtMultiplier;
-                power = Vector3.ClampMagnitude(power, hitMaxStrenght);
+                updateEndPosition(touch.position);
                 break;
             case TouchPhase.Ended:
                 Hit();
@@ -140,6 +124,32 @@ public class BallController : MonoBehaviour
                 ClearInput();
                 break;
         }
+    }
+
+    private void setStartPosition(Vector3 screenStartPos)
+    {
+        Ray ray;
+        float enter;
+        castPlane = new Plane(Vector3.up, transform.position);
+        ray = Camera.main.ScreenPointToRay(Input.mousePosition);
+        enter = 0.0f;
+        if (castPlane.Raycast(ray, out enter))
+            start = ray.GetPoint(enter);
+    }
+
+    private void updateEndPosition(Vector3 screenEndPosition)
+    {
+        Ray ray;
+        float enter;
+        ray = Camera.main.ScreenPointToRay(screenEndPosition);
+        enter = 0.0f;
+        if (castPlane.Raycast(ray, out enter))
+            end = ray.GetPoint(enter);
+        direction = start - end;
+        direction.Normalize();
+        power = direction * (end - start).magnitude * hitStrenghtMultiplier;
+        power = Vector3.ClampMagnitude(power, hitMaxStrenght);
+        predict();
     }
 
     private void Hit()
@@ -158,5 +168,9 @@ public class BallController : MonoBehaviour
         Gizmos.DrawSphere(end, .1f);
         Gizmos.color = Color.magenta;
         Gizmos.DrawSphere(transform.position + direction, .1f);
+    }
+
+    void predict(){
+        PredictionManager.instance.predict(gameObject, transform.position, power);
     }
 }
